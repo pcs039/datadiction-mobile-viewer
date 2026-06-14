@@ -4,33 +4,66 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Newspaper, Archive, Settings } from "lucide-react";
 
+interface ThemeClasses {
+  textAccent: string;
+  bgAccent: string;
+}
+
+const themeMap: Record<string, ThemeClasses> = {
+  haenam: {
+    textAccent: "text-orange-400",
+    bgAccent: "bg-orange-500/10",
+  },
+  wando: {
+    textAccent: "text-emerald-400",
+    bgAccent: "bg-emerald-500/10",
+  },
+  jindo: {
+    textAccent: "text-sky-400",
+    bgAccent: "bg-sky-500/10",
+  },
+};
+
 export default function BottomNav() {
   const pathname = usePathname();
+
+  // Extract municipalityId from pathname (e.g., /wando/page/1 -> wando, /wando/settings -> wando)
+  const match = pathname.match(/^\/([^\/]+)/);
+  const rawSlug = match ? match[1].toLowerCase() : "haenam";
+  const currentSlug = (rawSlug !== "settings") ? rawSlug : "haenam";
+
+  const theme = themeMap[currentSlug] || themeMap.haenam;
 
   const navItems = [
     {
       label: "Viewer",
-      href: "/",
+      href: `/${currentSlug}/page/1`,
       icon: Newspaper,
-      activePattern: /^\/$/,
+      activePattern: /^\/([^\/]+)\/page\/\d+$/,
+      rootActivePattern: /^\/$/,
     },
     {
       label: "Archive",
       href: "#",
       icon: Archive,
-      activePattern: /^\/archive/,
+      activePattern: /^\/([^\/]+)\/archive$/,
+      rootActivePattern: /^\/archive$/,
     },
     {
       label: "Settings",
-      href: "/settings",
+      href: `/${currentSlug}/settings`,
       icon: Settings,
-      activePattern: /^\/settings/,
+      activePattern: /^\/([^\/]+)\/settings$/,
+      rootActivePattern: /^\/settings$/,
     },
   ];
 
   const isActive = (item: typeof navItems[0]) => {
-    if (item.activePattern) {
-      return item.activePattern.test(pathname);
+    if (item.activePattern && item.activePattern.test(pathname)) {
+      return true;
+    }
+    if (item.rootActivePattern && item.rootActivePattern.test(pathname)) {
+      return true;
     }
     return pathname === item.href;
   };
@@ -53,7 +86,7 @@ export default function BottomNav() {
             }}
             className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all duration-300 ${
               active
-                ? "text-orange-400 bg-orange-500/10 scale-105"
+                ? `${theme.textAccent} ${theme.bgAccent} scale-105`
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >

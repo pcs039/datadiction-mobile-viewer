@@ -6,9 +6,12 @@ interface MobileContainerProps {
 
 export default function MobileContainer({ children }: MobileContainerProps) {
   return (
-    <div className="relative w-full max-w-md h-[840px] md:h-[880px] bg-slate-950 rounded-[48px] shadow-2xl border-8 border-slate-900 overflow-hidden flex flex-col transition-all duration-300">
-      {/* Phone Notch & Status Bar (Simulated) */}
-      <div className="flex justify-between items-center px-8 pt-4 pb-2 bg-slate-950 text-slate-400 text-xs font-semibold select-none z-50">
+    // md+ screens: max-w-md h-[840px] md:h-[880px] rounded-[48px] border-8 border-slate-900 shadow-2xl
+    // Mobile screens: w-full h-full rounded-none border-0 shadow-none (native fullscreen view)
+    <div className="relative w-full h-full md:max-w-md md:h-[840px] lg:h-[880px] bg-slate-950 md:rounded-[48px] md:shadow-2xl md:border-8 md:border-slate-900 overflow-hidden flex flex-col transition-all duration-300">
+      
+      {/* Phone Notch & Status Bar (Simulated) - Hidden on mobile screens to save viewport space */}
+      <div className="hidden md:flex justify-between items-center px-8 pt-4 pb-2 bg-slate-950 text-slate-400 text-xs font-semibold select-none z-50">
         <span>9:41</span>
         {/* Dynamic Notch */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-36 h-6 bg-slate-900 rounded-b-2xl flex items-center justify-center">
@@ -36,8 +39,8 @@ export default function MobileContainer({ children }: MobileContainerProps) {
         {children}
       </div>
 
-      {/* Bottom Safe Area Home Indicator */}
-      <div className="h-6 bg-slate-950 flex justify-center items-center select-none z-50">
+      {/* Bottom Safe Area Home Indicator - Hidden on mobile screens to allow edge-to-edge layout */}
+      <div className="hidden md:flex h-6 bg-slate-950 justify-center items-center select-none z-50">
         <div className="w-28 h-1 bg-slate-700 rounded-full opacity-60"></div>
       </div>
     </div>

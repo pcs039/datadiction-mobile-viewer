@@ -19,14 +19,21 @@ export const supabase = isSupabaseConfigured
   : null;
 
 /**
- * Fetch newsletter pages dynamically from Supabase, joining newsletters and page_contents tables.
+ * Fetch newsletter pages dynamically from Supabase filtered by municipality slug,
+ * joining newsletters and page_contents tables.
  * Returns null if not configured or query fails.
  */
-export async function fetchNewsletterPages(): Promise<SubPage[] | null> {
+export async function fetchNewsletterPages(municipalityId: string): Promise<SubPage[] | null> {
   if (!supabase) return null;
 
+  const nameMap: Record<string, string> = {
+    haenam: '해남군',
+    wando: '완도군',
+    jindo: '진도군'
+  };
+  const dbName = nameMap[municipalityId.toLowerCase()] || '해남군';
+
   try {
-    // We adjust the selected columns and relation fields according to the actual Supabase database schema
     const { data, error } = await supabase
       .from('sub_pages')
       .select(`
@@ -36,12 +43,13 @@ export async function fetchNewsletterPages(): Promise<SubPage[] | null> {
         title,
         category,
         layout_settings,
-        newsletters (
+        newsletters!inner (
           id,
           municipality_name,
           issue_number,
           publish_date,
-          cover_image_url
+          cover_image_url,
+          status
         ),
         page_contents (
           id,
@@ -51,20 +59,18 @@ export async function fetchNewsletterPages(): Promise<SubPage[] | null> {
           body_text
         )
       `)
+      .eq('newsletters.municipality_name', dbName)
       .order('page_number', { ascending: true });
 
     if (error) {
-      console.warn('Supabase fetchNewsletterPages failed:', error);
+      console.warn(`Supabase fetchNewsletterPages for ${dbName} failed:`, error);
       return null;
     }
 
     if (!data || data.length === 0) return null;
 
-    // Hard-code to unconditionally grab the first row from the table
-    const firstRowData = [data[0]];
-
     // Format the database layout into the UI model
-    const formattedData = firstRowData.map((subPage) => {
+    const formattedData = (data as any[]).map((subPage) => {
       const dbContents = subPage.page_contents || [];
       // Sort page contents by sort_order
       dbContents.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
@@ -86,7 +92,8 @@ export async function fetchNewsletterPages(): Promise<SubPage[] | null> {
       const newsletter = dbNewsletter ? {
         id: dbNewsletter.id,
         title: dbNewsletter.municipality_name || '',
-        description: `${dbNewsletter.issue_number || ''} · ${dbNewsletter.publish_date || ''}`
+        description: `${dbNewsletter.issue_number || ''} · ${dbNewsletter.publish_date || ''}`,
+        status: dbNewsletter.status || 'PENDING'
       } : null;
 
       return {
@@ -96,7 +103,8 @@ export async function fetchNewsletterPages(): Promise<SubPage[] | null> {
         page_number: subPage.page_number || 1,
         category: subPage.category || '',
         newsletters: newsletter,
-        page_contents: pageContents
+        page_contents: pageContents,
+        municipality_slug: municipalityId.toLowerCase()
       };
     });
 
@@ -106,3 +114,160 @@ export async function fetchNewsletterPages(): Promise<SubPage[] | null> {
     return null;
   }
 }
+
+/**
+ * Update the status of a newsletter to 'APPROVED' in Supabase.
+ * Returns true if successful, false if it fails or is not configured.
+ */
+export async function approveNewsletter(newsletterId: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('newsletters')
+      .update({ status: 'APPROVED' })
+      .eq('id', newsletterId);
+
+    if (error) {
+      console.warn("Supabase approveNewsletter failed:", error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Supabase approveNewsletter connection error:", err);
+    return false;
+  }
+}
+
+/**
+ * Insert a new newsletter page and related contents into Supabase.
+ * Returns true if successful, false on error.
+ */
+export async function createNewsletterPage(pageData: {
+  municipalityId: string;
+  issueNumber: string;
+  publishDate: string;
+  pageNumber: number;
+  category: string;
+  title: string;
+  body: string;
+  youtubeUrl?: string;
+  attractionName?: string;
+  attractionPhone?: string;
+}): Promise<boolean> {
+  if (!supabase) return false;
+
+  const nameMap: Record<string, string> = {
+    haenam: '해남군',
+    wando: '완도군',
+    jindo: '진도군'
+  };
+  const dbName = nameMap[pageData.municipalityId.toLowerCase()] || '해남군';
+
+  try {
+    // 1. Find or Insert Newsletter Issue
+    let newsletterId = '';
+    
+    const { data: existingNewsletters, error: selectErr } = await supabase
+      .from('newsletters')
+      .select('id')
+      .eq('municipality_name', dbName)
+      .eq('issue_number', pageData.issueNumber)
+      .limit(1);
+
+    if (selectErr) {
+      console.warn("Supabase find newsletter failed, trying to insert:", selectErr);
+    }
+
+    if (existingNewsletters && existingNewsletters.length > 0) {
+      newsletterId = existingNewsletters[0].id;
+    } else {
+      // Insert new newsletter
+      const { data: newNewsletter, error: insertNewsErr } = await supabase
+        .from('newsletters')
+        .insert({
+          municipality_name: dbName,
+          issue_number: pageData.issueNumber,
+          publish_date: pageData.publishDate
+        })
+        .select('id')
+        .single();
+
+      if (insertNewsErr) {
+        console.error("Supabase insert newsletter failed:", insertNewsErr);
+        return false;
+      }
+      newsletterId = newNewsletter.id;
+    }
+
+    // 2. Insert SubPage
+    const { data: newSubPage, error: insertSubErr } = await supabase
+      .from('sub_pages')
+      .insert({
+        newsletter_id: newsletterId,
+        page_number: pageData.pageNumber,
+        title: pageData.title,
+        category: pageData.category
+      })
+      .select('id')
+      .single();
+
+    if (insertSubErr) {
+      console.error("Supabase insert sub_pages failed:", insertSubErr);
+      return false;
+    }
+    const pageId = newSubPage.id;
+
+    // 3. Prepare Page Contents
+    const contentsToInsert: any[] = [];
+    let sortOrder = 1;
+
+    // Add main body paragraph(s)
+    const paragraphs = pageData.body.split('\n\n').filter(p => p.trim() !== '');
+    paragraphs.forEach((p) => {
+      contentsToInsert.push({
+        page_id: pageId,
+        sort_order: sortOrder++,
+        content_type: 'text',
+        body_text: p.trim()
+      });
+    });
+
+    // Add YouTube link paragraph (if provided)
+    if (pageData.youtubeUrl && pageData.youtubeUrl.trim() !== '') {
+      contentsToInsert.push({
+        page_id: pageId,
+        sort_order: sortOrder++,
+        content_type: 'video',
+        body_text: `기관 공식 유튜브 동영상 링크:\n• 동영상: ${pageData.youtubeUrl.trim()}`
+      });
+    }
+
+    // Add Local Attraction paragraph (if provided)
+    if (pageData.attractionName && pageData.attractionName.trim() !== '') {
+      const attractionPhoneText = pageData.attractionPhone ? `\n• 연락처: ${pageData.attractionPhone.trim()}` : '';
+      contentsToInsert.push({
+        page_id: pageId,
+        sort_order: sortOrder++,
+        content_type: 'widget',
+        body_text: `지역 추천 관광 명소 가이드:\n• 명소: ${pageData.attractionName.trim()}${attractionPhoneText}`
+      });
+    }
+
+    // 4. Insert Page Contents
+    const { error: insertContentsErr } = await supabase
+      .from('page_contents')
+      .insert(contentsToInsert);
+
+    if (insertContentsErr) {
+      console.error("Supabase insert page_contents failed:", insertContentsErr);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Supabase createNewsletterPage connection error:", err);
+    return false;
+  }
+}
+
+

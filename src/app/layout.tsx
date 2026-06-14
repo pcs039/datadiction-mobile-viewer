@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
-import MobileContainer from "@/components/MobileContainer";
+import ResponsiveLayoutWrapper from "@/components/ResponsiveLayoutWrapper";
+import DynamicBackground from "@/components/DynamicBackground";
+import GlobalHeader from "@/components/GlobalHeader";
 
 export const metadata: Metadata = {
   title: "Data Dictionary - Mobile Viewer",
@@ -20,15 +22,17 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased w-screen h-screen flex items-center justify-center bg-slate-950 relative overflow-hidden">
-        {/* Glow Spheres in Backdrop for Premium Look */}
-        <div className="absolute top-[10%] left-[20%] w-[350px] h-[350px] bg-orange-600/10 rounded-full blur-[100px] select-none pointer-events-none animate-pulse-slow"></div>
-        <div className="absolute bottom-[10%] right-[20%] w-[450px] h-[450px] bg-amber-600/10 rounded-full blur-[120px] select-none pointer-events-none animate-pulse-slow" style={{ animationDelay: '1.5s' }}></div>
+      <body className="antialiased w-screen h-screen bg-slate-950 relative overflow-hidden">
+        {/* Global Navigation Header Bar */}
+        <GlobalHeader />
 
-        {/* Mobile Mock Container */}
-        <MobileContainer>
+        {/* Glow Spheres in Backdrop for Premium Look */}
+        <DynamicBackground />
+
+        {/* Responsive Layout Wrapper (toggles mobile frame or full widescreen layout) */}
+        <ResponsiveLayoutWrapper>
           {children}
-        </MobileContainer>
+        </ResponsiveLayoutWrapper>
       </body>
     </html>
   );
