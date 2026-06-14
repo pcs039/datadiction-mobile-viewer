@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
-import ResponsiveLayoutWrapper from "@/components/ResponsiveLayoutWrapper";
 import DynamicBackground from "@/components/DynamicBackground";
 import GlobalHeader from "@/components/GlobalHeader";
 
@@ -22,17 +21,17 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased w-screen h-screen bg-slate-950 relative overflow-hidden">
+      <body className="antialiased w-screen h-screen bg-slate-950 relative overflow-hidden text-slate-200">
         {/* Global Navigation Header Bar */}
         <GlobalHeader />
 
         {/* Glow Spheres in Backdrop for Premium Look */}
         <DynamicBackground />
 
-        {/* Responsive Layout Wrapper (toggles mobile frame or full widescreen layout) */}
-        <ResponsiveLayoutWrapper>
+        {/* Full width content area starting below the global header */}
+        <div className="w-full h-full flex flex-col pt-14">
           {children}
-        </ResponsiveLayoutWrapper>
+        </div>
       </body>
     </html>
   );
